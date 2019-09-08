@@ -1,5 +1,7 @@
 package aemterliste2
 
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import io.javalin.Javalin
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
@@ -12,6 +14,7 @@ val baseTextDir = System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")?.let { if (it.i
 fun main() {
     println("Using baseTextDir: $baseTextDir")
     TxtFiles.values().forEach { println("Loaded:\n"+ runBlocking { it.loadContent()}) }
+    println(runBlocking { TxtFiles.ElectedUserJson.parseToUsers() } )
     val app = Javalin.create().start(8080)
     app.get("/") { ctx ->
         run {
@@ -38,13 +41,31 @@ enum  class TxtFiles(val filename: String) {
     ActiveRedirections("mails.txt"),
     MailmanLists("mailmanmails.txt"), JobRedirections("aemtermails.txt"), ElectedUserJson("aemter.json"), SecondaryElectionJson("aemter27.json");
 
-    suspend fun loadContent() : String = TODO("not yet implemented")
+    suspend fun loadContent() : String {
+        val remoteFile = File(baseTextDir+File.separator+this.filename)
+        //TODO: cache files in local filesystem to deal with remote connection problems. May also cache in jvm if useful
+        return remoteFile.readText(Charsets.UTF_8)
+    }
 
     suspend fun parseToUsers(): List<ElectedUser> {
         val secondaryFile : TxtFiles = TxtFiles.SecondaryElectionJson
         val firstFile = this.loadContent()
         val secondFile = secondaryFile.loadContent()
-        TODO("not yet implemented")
+        val gson = JsonParser()
+        val perJob = mutableMapOf<String, MutableList<ElectedUser>>()
+        val root = gson.parse(firstFile).asJsonObject
+        val x =  root.entrySet().toList().map {
+            val v = it.value.asJsonObject["DATENSATZ"].asJsonObject
+            ElectedUser(jobTitle = v["AMT"].asString, email = v["E-MAIL"].asString, firstName = v["VORNAME-PRIVATPERSON"].asString, nickName = v["BIERNAME"].asString, surName = v["NACHNAME-PRIVATPERSON"].asString, reelectionDate = v["NEUWAHL"].asString + " " + v["JAHR"].asString)
+        }
+        x.forEach {perJob.computeIfAbsent(it.jobTitle) { mutableListOf() }.add(it)}
+
+
+        gson.parse(secondFile).asJsonObject.entrySet().map { it.value.asJsonObject["DATENSATZ"].asJsonObject["AMT"].asString }.forEach { if(!perJob.containsKey(it)) {perJob[it] = mutableListOf(ElectedUser(jobTitle = it, email = "", firstName = "vakant", surName = "", nickName = "", reelectionDate = "N/A"))}}
+
+
+        return perJob.toList().sortedBy { it.first }.flatMap{ pair -> pair.second.toList().sortedBy { it.firstName }}
+
     }
 
 }
@@ -67,13 +88,12 @@ suspend fun generateHTML() : String {
                 }
                 link {
                     rel = "stylesheet"
-                    href = "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+                    href = "https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
                 }
                 title { +"""AVH Portal""" }
 
                 style {
-                    +"""
-                                pre {
+                    +"""pre {
                                 white-space: pre-wrap; overflow-x: scroll;
                                 }
                             """.trimIndent()
@@ -85,9 +105,9 @@ suspend fun generateHTML() : String {
                         h1 { +"AVH Portal" }
                         p { +"Willkommen auf dem Selbstbedienungsportal des Akademischen Verein Hütte" }
                         h2 { +"Reservierungen" }
-                        ul { reservierungenLinks.forEach { li { a(href = it.first) { +it.second } } } }
+                        ul { reservierungenLinks.forEach { li { a(href = it.second) { +it.first } } } }
                         h2 { +"Sonstige Links" }
-                        ul { sonstigeLinks.forEach { li { a(href = it.first) { +it.second } } } }
+                        ul { sonstigeLinks.forEach { li { a(href = it.second) { +it.first } } } }
                         h2 { +"Ämterliste" }
                         p { +"Diese Liste wird auf Basis der SEWOBE-Datenbank jede Nacht neu erstellt. Unbesetzte Ämter werden nicht angezeigt." }
 
@@ -123,15 +143,15 @@ suspend fun generateHTML() : String {
                         hr {}
                         h2 { +"Mailinglisten / aktive Weiterleitungen" }
                         p { +"""Dies sind die aktiven Mail-Weiterleitungen auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden. Diese Liste wird jeden Tag um 2 Uhr nachts automatisch neu generiert auf Basis der SEWOBE Datenbank.""" }
-                        pre { +"${runBlocking { TxtFiles.ActiveRedirections.loadContent() }}" }
+                        pre { +runBlocking { TxtFiles.ActiveRedirections.loadContent() } }
 
                         h2 { +"Mailadressen der Ämter" }
                         p { +"""Dies sind die aktiven Mail-Weiterleitungen der Ämter auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden. Diese Liste wird jeden Tag um 2 Uhr nachts automatisch neu generiert auf Basis der SEWOBE Datenbank.""" }
-                        pre { +"${runBlocking { TxtFiles.JobRedirections.loadContent() }}" }
+                        pre { +runBlocking { TxtFiles.JobRedirections.loadContent() } }
 
                         h2 { +"Aktive Mailman-Verteiler" }
                         p { +"""Dies sind die aktiven Mailman-Verteilerlisten ( = was für Verteiler gibt es überhaupt) auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden.""" }
-                        pre { +"${runBlocking { TxtFiles.MailmanLists.loadContent() }}" }
+                        pre { +runBlocking { TxtFiles.MailmanLists.loadContent() } }
 
                     }
                 }
