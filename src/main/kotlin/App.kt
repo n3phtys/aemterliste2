@@ -55,16 +55,19 @@ enum class TxtFiles(val filename: String) {
         val gson = JsonParser()
         val perJob = mutableMapOf<String, MutableList<ElectedUser>>()
         val root = gson.parse(firstFile).asJsonObject
-        val x = root.entrySet().toList().map {
+        val x = root.entrySet().toList().flatMap {
             val v = it.value.asJsonObject["DATENSATZ"].asJsonObject
-            ElectedUser(
-                jobTitle = v["AMT"].asString,
-                email = v["E-MAIL"].asString,
-                firstName = v["VORNAME-PRIVATPERSON"].asString,
-                nickName = v["BIERNAME"].asString,
-                surName = v["NACHNAME-PRIVATPERSON"].asString,
-                reelectionDate = v["NEUWAHL"].asString + " " + v["JAHR"].asString
-            )
+            val aemter = v["AMT"].asString.split(',')
+            aemter.map { amt ->
+                ElectedUser(
+                    jobTitle = amt,
+                    email = v["E-MAIL"].asString,
+                    firstName = v["VORNAME-PRIVATPERSON"].asString,
+                    nickName = v["BIERNAME"].asString,
+                    surName = v["NACHNAME-PRIVATPERSON"].asString,
+                    reelectionDate = v["NEUWAHL"].asString + " " + v["JAHR"].asString
+                )
+            }
         }
         x.forEach { perJob.computeIfAbsent(it.jobTitle) { mutableListOf() }.add(it) }
 
@@ -76,7 +79,7 @@ enum class TxtFiles(val filename: String) {
                     ElectedUser(
                         jobTitle = it,
                         email = "",
-                        firstName = "vakant",
+                        firstName = vakant,
                         surName = "",
                         nickName = "",
                         reelectionDate = "N/A"
@@ -158,10 +161,14 @@ suspend fun generateHTML(): String {
                                             tr {
                                                 td { +user.jobTitle }
                                                 td {
-                                                    a(
-                                                        href = user.email,
-                                                        target = "_top"
-                                                    ) { +"""${user.firstName} (${user.nickName}) ${user.surName}""" }
+                                                    if (user.firstName == vakant) {
+                                                        +vakant
+                                                    } else {
+                                                        a(
+                                                            href = user.email,
+                                                            target = "_top"
+                                                        ) { +"""${user.firstName} (${user.nickName}) ${user.surName}""" }
+                                                    }
                                                 }
                                                 td { +user.reelectionDate }
                                             }
@@ -192,6 +199,7 @@ suspend fun generateHTML(): String {
     }
 }
 
+val vakant = "vakant"
 
 fun <V> suspendToFuture(function: suspend () -> V): CompletableFuture<V> {
     val value = CompletableFuture<V>()
