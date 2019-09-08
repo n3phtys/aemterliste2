@@ -1,0 +1,10 @@
+.gradle
+.idea
+gradle
+build
+out
+testdata/aemter.json
+testdata/aemter27.json
+testdata/aemtermails.txt
+testdata/mailmanmails.txt
+testdata/mails.txt
