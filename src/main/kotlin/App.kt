@@ -9,12 +9,13 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.CompletableFuture
 
-val baseTextDir = System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")?.let { if (it.isBlank()) null else it }?: File("./testdata").absolutePath
+val baseTextDir = System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")?.let { if (it.isBlank()) null else it }
+    ?: File("./testdata").absolutePath
 
 fun main() {
     println("Using baseTextDir: $baseTextDir")
-    TxtFiles.values().forEach { println("Loaded:\n"+ runBlocking { it.loadContent()}) }
-    println(runBlocking { TxtFiles.ElectedUserJson.parseToUsers() } )
+    TxtFiles.values().forEach { println("Loaded:\n" + runBlocking { it.loadContent() }) }
+    println(runBlocking { TxtFiles.ElectedUserJson.parseToUsers() })
     val app = Javalin.create().start(8080)
     app.get("/") { ctx ->
         run {
@@ -25,56 +26,86 @@ fun main() {
 }
 
 
-
-
-data class ElectedUser(val jobTitle: String,
-                       val email: String,
-                       val firstName: String,
-                       val surName: String,
-                       val nickName: String,
-                       val reelectionDate: String
+data class ElectedUser(
+    val jobTitle: String,
+    val email: String,
+    val firstName: String,
+    val surName: String,
+    val nickName: String,
+    val reelectionDate: String
 )
 
 
-
-enum  class TxtFiles(val filename: String) {
+enum class TxtFiles(val filename: String) {
     ActiveRedirections("mails.txt"),
-    MailmanLists("mailmanmails.txt"), JobRedirections("aemtermails.txt"), ElectedUserJson("aemter.json"), SecondaryElectionJson("aemter27.json");
+    MailmanLists("mailmanmails.txt"), JobRedirections("aemtermails.txt"), ElectedUserJson("aemter.json"), SecondaryElectionJson(
+        "aemter27.json"
+    );
 
-    suspend fun loadContent() : String {
-        val remoteFile = File(baseTextDir+File.separator+this.filename)
+    suspend fun loadContent(): String {
+        val remoteFile = File(baseTextDir + File.separator + this.filename)
         //TODO: cache files in local filesystem to deal with remote connection problems. May also cache in jvm if useful
         return remoteFile.readText(Charsets.UTF_8)
     }
 
     suspend fun parseToUsers(): List<ElectedUser> {
-        val secondaryFile : TxtFiles = TxtFiles.SecondaryElectionJson
+        val secondaryFile: TxtFiles = TxtFiles.SecondaryElectionJson
         val firstFile = this.loadContent()
         val secondFile = secondaryFile.loadContent()
         val gson = JsonParser()
         val perJob = mutableMapOf<String, MutableList<ElectedUser>>()
         val root = gson.parse(firstFile).asJsonObject
-        val x =  root.entrySet().toList().map {
+        val x = root.entrySet().toList().map {
             val v = it.value.asJsonObject["DATENSATZ"].asJsonObject
-            ElectedUser(jobTitle = v["AMT"].asString, email = v["E-MAIL"].asString, firstName = v["VORNAME-PRIVATPERSON"].asString, nickName = v["BIERNAME"].asString, surName = v["NACHNAME-PRIVATPERSON"].asString, reelectionDate = v["NEUWAHL"].asString + " " + v["JAHR"].asString)
+            ElectedUser(
+                jobTitle = v["AMT"].asString,
+                email = v["E-MAIL"].asString,
+                firstName = v["VORNAME-PRIVATPERSON"].asString,
+                nickName = v["BIERNAME"].asString,
+                surName = v["NACHNAME-PRIVATPERSON"].asString,
+                reelectionDate = v["NEUWAHL"].asString + " " + v["JAHR"].asString
+            )
         }
-        x.forEach {perJob.computeIfAbsent(it.jobTitle) { mutableListOf() }.add(it)}
+        x.forEach { perJob.computeIfAbsent(it.jobTitle) { mutableListOf() }.add(it) }
 
 
-        gson.parse(secondFile).asJsonObject.entrySet().map { it.value.asJsonObject["DATENSATZ"].asJsonObject["AMT"].asString }.forEach { if(!perJob.containsKey(it)) {perJob[it] = mutableListOf(ElectedUser(jobTitle = it, email = "", firstName = "vakant", surName = "", nickName = "", reelectionDate = "N/A"))}}
+        gson.parse(secondFile).asJsonObject.entrySet()
+            .map { it.value.asJsonObject["DATENSATZ"].asJsonObject["AMT"].asString }.forEach {
+            if (!perJob.containsKey(it)) {
+                perJob[it] = mutableListOf(
+                    ElectedUser(
+                        jobTitle = it,
+                        email = "",
+                        firstName = "vakant",
+                        surName = "",
+                        nickName = "",
+                        reelectionDate = "N/A"
+                    )
+                )
+            }
+        }
 
 
-        return perJob.toList().sortedBy { it.first }.flatMap{ pair -> pair.second.toList().sortedBy { it.firstName }}
+        return perJob.toList().sortedBy { it.first }.flatMap { pair -> pair.second.toList().sortedBy { it.firstName } }
 
     }
 
 }
 
 
-val reservierungenLinks = listOf("Gästezimmer Karlsruhe (Waldhornstraße)" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=gaestezimmer_ka", "Saal Karlsruhe" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=saal_ka", "Skihütte" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=skihuette", "Gästezimmer Berlin (Carmerstraße)" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=carmerstrasze")
-val sonstigeLinks = listOf("Webseite" to "https://www.av-huette.de/", "SEWOBE Mitgliederportal" to "https://server30.der-moderne-verein.de/portal/index.php", "SEWOBE Ämterportal (nur für relevante Amtsträger)" to "https://server30.der-moderne-verein.de/module/login.php")
+val reservierungenLinks = listOf(
+    "Gästezimmer Karlsruhe (Waldhornstraße)" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=gaestezimmer_ka",
+    "Saal Karlsruhe" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=saal_ka",
+    "Skihütte" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=skihuette",
+    "Gästezimmer Berlin (Carmerstraße)" to "https://reservierungen.av-huette.de/v2/index.html?selected_key=carmerstrasze"
+)
+val sonstigeLinks = listOf(
+    "Webseite" to "https://www.av-huette.de/",
+    "SEWOBE Mitgliederportal" to "https://server30.der-moderne-verein.de/portal/index.php",
+    "SEWOBE Ämterportal (nur für relevante Amtsträger)" to "https://server30.der-moderne-verein.de/module/login.php"
+)
 
-suspend fun generateHTML() : String {
+suspend fun generateHTML(): String {
     val output: Appendable = StringBuilder()
     run {
         output.appendHTML().html {
@@ -162,23 +193,20 @@ suspend fun generateHTML() : String {
 }
 
 
-
-
-    fun <V> suspendToFuture(function: suspend () -> V): CompletableFuture<V> {
-        val value = CompletableFuture<V>()
-        GlobalScope.launch {
-            try {
-                val v = function.invoke()
-                value.complete(v)
-            } catch (e : Throwable) {
-                value.completeExceptionally(e)
-            }
+fun <V> suspendToFuture(function: suspend () -> V): CompletableFuture<V> {
+    val value = CompletableFuture<V>()
+    GlobalScope.launch {
+        try {
+            val v = function.invoke()
+            value.complete(v)
+        } catch (e: Throwable) {
+            value.completeExceptionally(e)
         }
-        return value
     }
+    return value
+}
 
 
-
-fun generateHTMLFuture() : CompletableFuture<String> = suspendToFuture {
+fun generateHTMLFuture(): CompletableFuture<String> = suspendToFuture {
     generateHTML()
 }
