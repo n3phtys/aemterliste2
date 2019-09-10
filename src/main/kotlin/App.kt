@@ -1,11 +1,12 @@
 package aemterliste2
 
-import com.google.gson.Gson
 import com.google.gson.JsonParser
 import io.javalin.Javalin
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
-import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.CompletableFuture
 
@@ -127,10 +128,10 @@ suspend fun generateHTML(): String {
                 title { +"""AVH Portal""" }
 
                 style {
-                    +"""pre {
+                    ("""pre {
                                 white-space: pre-wrap; overflow-x: scroll;
                                 }
-                            """.trimIndent()
+                            """.trimIndent())
                 }
             }
             body {
