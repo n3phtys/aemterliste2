@@ -1,13 +1,20 @@
 [
   {
-    "name": "[Lorg.eclipse.jetty.servlet.ServletMapping;",
+    "name": "com.google.gson.JsonParser",
     "allDeclaredFields": true,
     "allPublicFields": true,
     "allDeclaredMethods": true,
     "allPublicMethods": true
   },
   {
-    "name": "[Lkotlin.coroutines.CoroutineContext;",
+    "name": "com.nixxcode.jvmbrotli.enc.BrotliOutputStream",
+    "allDeclaredFields": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "com.fasterxml.jackson.databind.ObjectMapper",
     "allDeclaredFields": true,
     "allPublicFields": true,
     "allDeclaredMethods": true,

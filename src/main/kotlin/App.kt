@@ -2,21 +2,17 @@ package aemterliste2
 
 import com.google.gson.JsonParser
 import io.javalin.Javalin
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
 import java.io.File
-import java.util.concurrent.CompletableFuture
 
 val baseTextDir = System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")?.let { if (it.isBlank()) null else it }
     ?: File("./testdata").absolutePath
 
 fun main() {
     println("Using baseTextDir: $baseTextDir")
-    TxtFiles.values().forEach { println("Loaded:\n" + runBlocking { it.loadContent() }) }
-    println(runBlocking { TxtFiles.ElectedUserJson.parseToUsers() })
+    TxtFiles.values().forEach { println("Loaded:\n" + it.loadContent() ) }
+    println( TxtFiles.ElectedUserJson.parseToUsers())
     val app = Javalin.create().start(8080)
     app.get("/") { ctx ->
         run {
@@ -43,13 +39,13 @@ enum class TxtFiles(val filename: String) {
         "aemter27.json"
     );
 
-    suspend fun loadContent(): String {
+    fun loadContent(): String {
         val remoteFile = File(baseTextDir + File.separator + this.filename)
         //TODO: cache files in local filesystem to deal with remote connection problems. May also cache in jvm if useful
         return remoteFile.readText(Charsets.UTF_8)
     }
 
-    suspend fun parseToUsers(): List<ElectedUser> {
+    fun parseToUsers(): List<ElectedUser> {
         val secondaryFile: TxtFiles = TxtFiles.SecondaryElectionJson
         val firstFile = this.loadContent()
         val secondFile = secondaryFile.loadContent()
@@ -109,7 +105,7 @@ val sonstigeLinks = listOf(
     "SEWOBE Ämterportal (nur für relevante Amtsträger)" to "https://server30.der-moderne-verein.de/module/login.php"
 )
 
-suspend fun generateHTML(): String {
+fun generateHTML(): String {
     val output: Appendable = StringBuilder()
     run {
         output.appendHTML().html {
@@ -157,7 +153,7 @@ suspend fun generateHTML(): String {
                                         }
                                     }
                                     tbody {
-                                        val users = runBlocking { TxtFiles.ElectedUserJson.parseToUsers() }
+                                        val users = TxtFiles.ElectedUserJson.parseToUsers()
                                         users.forEach { user ->
                                             tr {
                                                 td { +user.jobTitle }
@@ -182,15 +178,15 @@ suspend fun generateHTML(): String {
                         hr {}
                         h2 { +"Mailinglisten / aktive Weiterleitungen" }
                         p { +"""Dies sind die aktiven Mail-Weiterleitungen auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden. Diese Liste wird jeden Tag um 2 Uhr nachts automatisch neu generiert auf Basis der SEWOBE Datenbank.""" }
-                        pre { +runBlocking { TxtFiles.ActiveRedirections.loadContent() } }
+                        pre { +(TxtFiles.ActiveRedirections.loadContent()) }
 
                         h2 { +"Mailadressen der Ämter" }
                         p { +"""Dies sind die aktiven Mail-Weiterleitungen der Ämter auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden. Diese Liste wird jeden Tag um 2 Uhr nachts automatisch neu generiert auf Basis der SEWOBE Datenbank.""" }
-                        pre { +runBlocking { TxtFiles.JobRedirections.loadContent() } }
+                        pre { +(TxtFiles.JobRedirections.loadContent() ) }
 
                         h2 { +"Aktive Mailman-Verteiler" }
                         p { +"""Dies sind die aktiven Mailman-Verteilerlisten ( = was für Verteiler gibt es überhaupt) auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden.""" }
-                        pre { +runBlocking { TxtFiles.MailmanLists.loadContent() } }
+                        pre { +( TxtFiles.MailmanLists.loadContent() ) }
 
                     }
                 }
@@ -202,20 +198,6 @@ suspend fun generateHTML(): String {
 
 val vakant = "vakant"
 
-fun <V> suspendToFuture(function: suspend () -> V): CompletableFuture<V> {
-    val value = CompletableFuture<V>()
-    GlobalScope.launch {
-        try {
-            val v = function.invoke()
-            value.complete(v)
-        } catch (e: Throwable) {
-            value.completeExceptionally(e)
-        }
-    }
-    return value
-}
 
 
-fun generateHTMLFuture(): CompletableFuture<String> = suspendToFuture {
-    generateHTML()
-}
+fun generateHTMLFuture(): String = generateHTML()
