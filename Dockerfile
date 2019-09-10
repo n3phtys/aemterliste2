@@ -8,5 +8,7 @@ RUN native-image -jar /tmp/build/build/libs/aemterliste2-all-1.0-SNAPSHOT.jar -H
   -H:Name=aemterliste2 --static && ls -la /tmp/build
 
 FROM scratch
-COPY --from=0 /tmp/build/aemterliste2 /
-ENTRYPOINT ["/aemterliste2"]
+COPY --from=0 /tmp/build/aemterliste2 /app/aemterliste2
+COPY ./testdata /app/testdata
+WORKDIR /app
+ENTRYPOINT ["/app/aemterliste2"]
