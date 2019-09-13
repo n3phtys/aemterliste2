@@ -11,7 +11,7 @@ import java.net.URL
 import java.time.Duration
 import java.time.LocalDateTime
 
-
+//TODO: broken umlaute in native-image, should be caused by some Javalin configuration that defaults correctly in JVM but not outside
 
 val baseTextDir: File =  File("testdata")
 
