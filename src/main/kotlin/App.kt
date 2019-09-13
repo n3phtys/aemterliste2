@@ -12,11 +12,10 @@ import java.time.Duration
 import java.time.LocalDateTime
 
 
-val baseTextDir = System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")?.let { if (it.isBlank()) null else it }
-    ?: (File("testdata").absolutePath ?: null)!!
+
+val baseTextDir: File =  File("testdata")
 
 fun main() {
-    println("Path var is: ${System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")}")
     println("Using baseTextDir: $baseTextDir")
     TxtFiles.values().forEach { println("Loaded:\n" + it.loadContent()) }
     println(TxtFiles.ElectedUserJson.parseToUsers())
@@ -98,7 +97,7 @@ enum class TxtFiles(private val filename: String, private val sewobeQueryId: Int
     fun loadContent(): String {
         val now = LocalDateTime.now()
         if (lastUpdate.plus(durationBetweenCaching).isBefore(now)) {
-            val remoteFile = File(baseTextDir + File.separator + this.filename)
+            val remoteFile = baseTextDir.resolve(this.filename)
             val qid = this.sewobeQueryId
             val result: String = if (qid != null) {
                 val q = getSewobeQuery()
