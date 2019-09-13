@@ -10,5 +10,6 @@ RUN native-image -jar /tmp/build/build/libs/aemterliste2-all-1.0-SNAPSHOT.jar -H
 FROM scratch
 COPY --from=0 /tmp/build/aemterliste2 /app/aemterliste2
 COPY ./testdata /app/testdata
+ENV AEMTERLISTE_TXT_FILE_BASE_DIR /app/testdata
 WORKDIR /app
-ENTRYPOINT ["/app/aemterliste2"]
+CMD ["/app/aemterliste2"]

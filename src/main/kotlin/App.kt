@@ -5,14 +5,21 @@ import io.javalin.Javalin
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
 import java.io.File
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.time.Duration
+import java.time.LocalDateTime
+
 
 val baseTextDir = System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")?.let { if (it.isBlank()) null else it }
-    ?: File("./testdata").absolutePath
+    ?: (File("testdata").absolutePath ?: null)!!
 
 fun main() {
+    println("Path var is: ${System.getenv("AEMTERLISTE_TXT_FILE_BASE_DIR")}")
     println("Using baseTextDir: $baseTextDir")
-    TxtFiles.values().forEach { println("Loaded:\n" + it.loadContent() ) }
-    println( TxtFiles.ElectedUserJson.parseToUsers())
+    TxtFiles.values().forEach { println("Loaded:\n" + it.loadContent()) }
+    println(TxtFiles.ElectedUserJson.parseToUsers())
     val app = Javalin.create().start(8080)
     app.get("/") { ctx ->
         run {
@@ -32,21 +39,94 @@ data class ElectedUser(
     val reelectionDate: String
 )
 
+private fun getSewobeQuery(): SewobeQuery? {
+    val url = System.getenv("SEWOBEURL")
+        ?: "https://server30.der-moderne-verein.de/restservice/standard/v1.0/auswertungen/get_auswertung_data.php"
+    val un = System.getenv("SEWOBEUSER") ?: "restuser"
+    val pw = System.getenv("SEWOBEPASSWORD") ?: null
+    return if (pw != null) {
+        SewobeQuery(url, un, pw)
+    } else {
+        null
+    }
+}
 
-enum class TxtFiles(val filename: String) {
+data class SewobeQuery(val url: String, val username: String, val password: String?) {
+    fun query(sewobeQueryId: Int): String? {
+        try {
+            val urlObj = URL(url)
+            with(urlObj.openConnection() as HttpURLConnection) {
+                doOutput = true
+                requestMethod = "POST"
+                val myParameters = "USERNAME=$username&PASSWORT=$password&AUSWERTUNG_ID=$sewobeQueryId"
+                val writer = OutputStreamWriter(outputStream)
+                writer.write(myParameters)
+                writer.flush()
+                val s = inputStream.bufferedReader().readText()
+                //check if actually valid json (useless otherwise)
+                checkIfJson(s)
+                return s
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+    }
+
+}
+
+
+private fun checkIfJson(s: String) {
+    require(null != JsonParser().parse(s))
+}
+
+private val durationBetweenCaching: Duration = Duration.ofMinutes(5)!!
+
+enum class TxtFiles(private val filename: String, private val sewobeQueryId: Int? = null /*if set, queries sewobe*/) {
     ActiveRedirections("mails.txt"),
-    MailmanLists("mailmanmails.txt"), JobRedirections("aemtermails.txt"), ElectedUserJson("aemter.json"), SecondaryElectionJson(
-        "aemter27.json"
-    );
+    MailmanLists("mailmanmails.txt"), JobRedirections("aemtermails.txt"), ElectedUserJson(
+        "aemter.json",
+        170
+    ),
+    SecondaryElectionJson("aemter27.json", 27);
 
+
+    private var lastUpdate = LocalDateTime.of(0, 1, 1, 0, 0)
+    private var lastValue: String = ""
+
+    @Synchronized
     fun loadContent(): String {
-        val remoteFile = File(baseTextDir + File.separator + this.filename)
-        //TODO: cache files in local filesystem to deal with remote connection problems. May also cache in jvm if useful
-        return remoteFile.readText(Charsets.UTF_8)
+        val now = LocalDateTime.now()
+        if (lastUpdate.plus(durationBetweenCaching).isBefore(now)) {
+            val remoteFile = File(baseTextDir + File.separator + this.filename)
+            val qid = this.sewobeQueryId
+            val result: String = if (qid != null) {
+                val q = getSewobeQuery()
+                if (q != null) {
+                    val r = q.query(qid)
+                    if (r != null) {
+                        //complex check to prevent writing if nothing changed
+                        if (r != lastValue && (!(remoteFile.exists()) || remoteFile.readText(Charsets.UTF_8) != r)) {
+                            remoteFile.writeText(r, Charsets.UTF_8)
+                        }
+                        r
+                    } else {
+                        remoteFile.readText(Charsets.UTF_8)
+                    }
+                } else {
+                    remoteFile.readText(Charsets.UTF_8)
+                }
+            } else {
+                remoteFile.readText(Charsets.UTF_8)
+            }
+            this.lastValue = result
+            this.lastUpdate = LocalDateTime.now()
+        }
+        return lastValue
     }
 
     fun parseToUsers(): List<ElectedUser> {
-        val secondaryFile: TxtFiles = TxtFiles.SecondaryElectionJson
+        val secondaryFile: TxtFiles = SecondaryElectionJson
         val firstFile = this.loadContent()
         val secondFile = secondaryFile.loadContent()
         val gson = JsonParser()
@@ -71,19 +151,19 @@ enum class TxtFiles(val filename: String) {
 
         gson.parse(secondFile).asJsonObject.entrySet()
             .map { it.value.asJsonObject["DATENSATZ"].asJsonObject["AMT"].asString }.forEach {
-            if (!perJob.containsKey(it)) {
-                perJob[it] = mutableListOf(
-                    ElectedUser(
-                        jobTitle = it,
-                        email = "",
-                        firstName = vakant,
-                        surName = "",
-                        nickName = "",
-                        reelectionDate = "N/A"
+                if (!perJob.containsKey(it)) {
+                    perJob[it] = mutableListOf(
+                        ElectedUser(
+                            jobTitle = it,
+                            email = "",
+                            firstName = vakant,
+                            surName = "",
+                            nickName = "",
+                            reelectionDate = "N/A"
+                        )
                     )
-                )
+                }
             }
-        }
 
 
         return perJob.toList().sortedBy { it.first }.flatMap { pair -> pair.second.toList().sortedBy { it.firstName } }
@@ -182,11 +262,11 @@ fun generateHTML(): String {
 
                         h2 { +"Mailadressen der Ämter" }
                         p { +"""Dies sind die aktiven Mail-Weiterleitungen der Ämter auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden. Diese Liste wird jeden Tag um 2 Uhr nachts automatisch neu generiert auf Basis der SEWOBE Datenbank.""" }
-                        pre { +(TxtFiles.JobRedirections.loadContent() ) }
+                        pre { +(TxtFiles.JobRedirections.loadContent()) }
 
                         h2 { +"Aktive Mailman-Verteiler" }
                         p { +"""Dies sind die aktiven Mailman-Verteilerlisten ( = was für Verteiler gibt es überhaupt) auf dem av-huette-Mailserver. Diese Liste ist im Format "x:y" wobei alle Mails an "x@av-huette.de" an Adresse "y" weitergeleitet werden.""" }
-                        pre { +( TxtFiles.MailmanLists.loadContent() ) }
+                        pre { +(TxtFiles.MailmanLists.loadContent()) }
 
                     }
                 }
@@ -196,8 +276,7 @@ fun generateHTML(): String {
     }
 }
 
-val vakant = "vakant"
-
+const val vakant = "vakant"
 
 
 fun generateHTMLFuture(): String = generateHTML()
