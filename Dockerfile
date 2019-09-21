@@ -15,5 +15,5 @@ COPY --from=0 /libsunec.so /libsunec.so
 COPY --from=0 /cacerts /cacerts
 COPY ./testdata /testdata
 ENV AEMTERLISTE_TXT_FILE_BASE_DIR /testdata
-RUN ls -la ./
-CMD ["/aemterliste2", "-Djavax.net.ssl.trustStore=/cacerts", "-Djavax.net.ssl.trustAnchors=/cacerts"]
+RUN touch /testdata/aemter.json && touch /testdata/aemter27.json && touch /testdata/aemtermails.txt && touch /testdata/mailmanmails.txt && touch /testdata/mails.txt && ls -laR ./
+CMD ["./aemterliste2", "-Djavax.net.ssl.trustStore=./cacerts", "-Djavax.net.ssl.trustAnchors=./cacerts", "-Djava.library.path=./"]
